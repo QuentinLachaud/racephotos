@@ -53,6 +53,7 @@ cover/
 .secrets*
 .environments
 /racephotos-environment/*
+queries
 
 # Translations
 *.mo

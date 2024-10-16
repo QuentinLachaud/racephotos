@@ -4,81 +4,48 @@ import mysql.connector
 from mysql.connector import Error
 import pandas as pd
 from mysql.connector import connect
+import boto3
+import os
+from botocore.exceptions import NoCredentialsError, ClientError
+import io
+
+# AWS client setup 
+s3 = boto3.client('s3')
 
 
-
-def fetch_data_to_dataframe(query, host='', user='admin', password='TimAp777!', database='racephotos_user_details'):
-    
-    connection = connect(
-        host='localhost',
-        user='root',
-        password='pass',
-        database='users'  # Specify your database
-    )
-    
-    try:
-        df = pd.read_sql(query, connection)  # Using read_sql to fetch directly into DataFrame
-    finally:
-        connection.close()
-    
-    return df
-
-def add_user_to_database(name, email, phone, dob):
-    # connection = None
-    try:
-        # Connect to MySQL database
-        connection = mysql.connector.connect(
-            host='localhost',  # Change if MySQL is hosted elsewhere
-            database='users', # Change to your database name
-            user='root',  # Change to your MySQL username
-            password='pass',
-            port=3306  # Change to your MySQL password
-        )
-
-        if connection.is_connected():
-            cursor = connection.cursor()
-
-            # Insert query
-            query = """INSERT INTO user_details (name, email, phone, dob) 
-                    VALUES (%s, %s, %s, %s)"""
-            values = (name, email, phone, dob)
-
-            # Execute query and commit changes
-            cursor.execute(query, values)
-            connection.commit()
-            print(f"User {name} added successfully.")
-
-    except Error as e:
-        print(f"Error while connecting to MySQL: {e}")
-    finally:
-        if connection:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-                print("MySQL connection closed.")
-    
-    
-
-def upload_to_s3(file_name, bucket_name, object_name=None):
+def upload_image_to_s3(file_content, user_id, bucket_name, file_name=None):
     """
-    Upload any file to s3 by providing its local path, 
-    bucket name and object name (e.g. text_file.txt)
+    Uploads an image to S3.
+    :param file_content: File data (bytes) to upload.
+    :param user_id: Unique identifier for the user.
+    :param bucket_name: S3 bucket name.
+    :param file_name: Optional custom file name.
+    :return: S3 key of the uploaded image.
     """
-    import boto3
-    from botocore.exceptions import NoCredentialsError
-
-    # If S3 object_name is not specified, use the file_name
-    if object_name is None:
-        object_name = file_name
-    
-    # Initialize an S3 client
-    s3_client = boto3.client('s3')
-    
     try:
-        # Upload the file
-        s3_client.upload_file(file_name, bucket_name, object_name)
-        print(f"File {file_name} uploaded to {bucket_name}/{object_name}")
-    except FileNotFoundError:
-        print(f"The file {file_name} was not found.")
+        # Generate a file name if not provided
+        if not file_name:
+            file_name = f"{user_id}_{generate_timestamp()}.jpg"
+        
+        # S3 key will be structured by user ID
+        s3_key = f"users/{user_id}/{file_name}"
+        
+        # Upload file to S3
+        s3.put_object(Bucket=bucket_name, Key=s3_key, Body=file_content, ContentType='image/jpeg')
+        return s3_key
+    
+    except ClientError as e:
+        print(f"Error uploading image to S3: {e}")
+        return None
     except NoCredentialsError:
-        print("Credentials not available.")
+        print("AWS credentials not available.")
+        return None
+
+def generate_timestamp():
+    """
+    Helper function to generate a timestamp for unique file names.
+    :return: Timestamp string.
+    """
+    from datetime import datetime
+    return datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+

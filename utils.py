@@ -38,6 +38,7 @@ def upload_image_to_s3(file_path, user_id, event_id, bucket_name=BUCKET_NAME):
     except ClientError as e:
         print(f"Failed to upload {file_name}: {e}")
 
+
 def generate_timestamp():
     """
     Helper function to generate a timestamp for unique file names.
@@ -47,7 +48,7 @@ def generate_timestamp():
     return datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
 
-def list_items_in_s3_folder(bucket_name=BUCKET_NAME, folder_prefix):
+def list_items_in_s3_folder(bucket_name=BUCKET_NAME, Prefix=None):
     """
     Counts the number of objects in a specific folder within an S3 bucket,
     excluding the folder itself.
@@ -61,14 +62,14 @@ def list_items_in_s3_folder(bucket_name=BUCKET_NAME, folder_prefix):
     """
     try:
         # List the objects in the specified folder (prefix)
-        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=folder_prefix)
+        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=Prefix)
 
         # Check if there are any contents in the response
         if 'Contents' in response:
             # Filter out the folder itself (if it's included as an object)
             contents_only = [
                 obj for obj in response['Contents'] 
-                if obj['Key'] != folder_prefix
+                if obj['Key'] != Prefix
             ]
 
             # Return the count of actual contents
@@ -79,6 +80,33 @@ def list_items_in_s3_folder(bucket_name=BUCKET_NAME, folder_prefix):
     except Exception as e:
         print(f"Error occurred: {e}")
         return None
+    
+
+def generate_presigned_urls(bucket_name, object_keys, expiration=600):
+    """
+    Generates pre-signed URLs for the provided list of object keys.
+
+    Parameters:
+    bucket_name (str): The name of the S3 bucket.
+    object_keys (list): A list of object keys for which to generate pre-signed URLs.
+    expiration (int): Time in seconds for the URL to remain valid (default is 600 seconds).
+
+    Returns:
+    list: A list of pre-signed URLs for each object key provided.
+    """
+    urls = []
+    for key in object_keys:
+        try:
+            url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket_name, 'Key': key},
+                ExpiresIn=expiration
+            )
+            urls.append(url)
+        except Exception as e:
+            print(f"Error generating URL for {key}: {e}")
+    
+    return urls
 
 
 def get_user_image_urls(user_id, bucket_name=BUCKET_NAME):
